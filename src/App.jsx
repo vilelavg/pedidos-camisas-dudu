@@ -7,16 +7,116 @@ import { calculateItemPrice, formatCurrency, generateOrderSummary } from './util
 import { ShirtIcon, CheckCircleIcon } from './components/Icons';
 
 // ══════════════════════════════════════════════════════════════
-// ⚠️ CONFIGURAÇÃO 1: COLE AQUI A URL DO GOOGLE APPS SCRIPT
+// ⚠️ CONFIGURAÇÃO 1: COLE AQUI A URL DO SUPABASE
 // ══════════════════════════════════════════════════════════════
-const API_URL = 'https://script.google.com/macros/s/AKfycbzUmgQ_CCKVUGOkaFdWUBcsY40swIHWHlEWjwonKbaDBJsT5t6Ay2U_JJIs8thq9Fc9GA/exec';
+const SUPABASE_URL = 'https://mupdmpwnpaozbyvpofkk.supabase.co';
 
 // ══════════════════════════════════════════════════════════════
-// ⚠️ CONFIGURAÇÃO 2: COLOQUE O NÚMERO DO WHATSAPP DO VENDEDOR
+// ⚠️ CONFIGURAÇÃO 2: COLE AQUI A CHAVE ANON DO SUPABASE
+// ══════════════════════════════════════════════════════════════
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11cGRtcHducGFvemJ5dnBvZmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MzIzNzcsImV4cCI6MjA4NDUwODM3N30.FFb_WP1vlfbcmqlwoSiASKZePdY8pVNO-yuHIq6kQCE';
+
+// ══════════════════════════════════════════════════════════════
+// ⚠️ CONFIGURAÇÃO 3: COLOQUE O NÚMERO DO WHATSAPP DO VENDEDOR
 // Formato: 55 + DDD + número (apenas números, sem espaços)
 // Exemplo: '5511999999999'
 // ══════════════════════════════════════════════════════════════
 const WHATSAPP_NUMBER = '5511969009039';
+
+// Função para gerar código do pedido
+function gerarCodigoPedido() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let codigo = 'PED-';
+  for (let i = 0; i < 8; i++) {
+    codigo += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return codigo;
+}
+
+// Função para buscar ou criar cliente
+async function buscarOuCriarCliente(customer) {
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
+
+  // Buscar cliente pelo telefone
+  const buscaResponse = await fetch(
+    `${SUPABASE_URL}/rest/v1/clientes?telefone=eq.${encodeURIComponent(customer.phone)}&select=*`,
+    { headers }
+  );
+  
+  const clientesExistentes = await buscaResponse.json();
+  
+  if (clientesExistentes && clientesExistentes.length > 0) {
+    // Cliente existe - atualizar dados se necessário
+    const clienteExistente = clientesExistentes[0];
+    
+    if (clienteExistente.nome !== customer.name || clienteExistente.endereco !== customer.address) {
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/clientes?id=eq.${clienteExistente.id}`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            nome: customer.name,
+            endereco: customer.address
+          })
+        }
+      );
+    }
+    
+    return clienteExistente.id;
+  } else {
+    // Cliente não existe - criar novo
+    const criarResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/clientes`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          nome: customer.name,
+          telefone: customer.phone,
+          endereco: customer.address
+        })
+      }
+    );
+    
+    const novoCliente = await criarResponse.json();
+    return novoCliente[0].id;
+  }
+}
+
+// Função para salvar pedidos
+async function salvarPedidos(clienteId, codigoPedido, items) {
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json'
+  };
+
+  const pedidos = items.map(item => ({
+    cliente_id: clienteId,
+    pedido_codigo: codigoPedido,
+    time: item.team,
+    temporada: item.season,
+    cor: item.color,
+    tamanho: item.size,
+    modelo: item.model,
+    preco: item.price
+  }));
+
+  await fetch(
+    `${SUPABASE_URL}/rest/v1/pedidos`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(pedidos)
+    }
+  );
+}
 
 export default function App() {
   const [step, setStep] = useState(1);
@@ -37,23 +137,19 @@ export default function App() {
     if (cart.length === 0) return;
     setIsSubmitting(true);
 
-    const orderData = {
-      customer,
-      items: cart.map(({ team, season, color, size, model, price }) => ({ team, season, color, size, model, price })),
-      total: cart.reduce((sum, item) => sum + item.price, 0),
-      totalItems: cart.length,
-      orderDate: new Date().toISOString()
-    };
-
     try {
-      await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderData),
-        mode: 'no-cors'
-      });
+      // 1. Buscar ou criar cliente
+      const clienteId = await buscarOuCriarCliente(customer);
+      
+      // 2. Gerar código do pedido
+      const codigoPedido = gerarCodigoPedido();
+      
+      // 3. Salvar itens do pedido
+      await salvarPedidos(clienteId, codigoPedido, cart);
+      
+      console.log('Pedido salvo com sucesso!');
     } catch (error) {
-      console.error('Erro:', error);
+      console.error('Erro ao salvar pedido:', error);
     }
 
     setOrderSummary(generateOrderSummary(customer, cart));
