@@ -9,7 +9,7 @@ import { ShirtIcon, CheckCircleIcon } from './components/Icons';
 // ══════════════════════════════════════════════════════════════
 // ⚠️ CONFIGURAÇÃO 1: COLE AQUI A URL DO GOOGLE APPS SCRIPT
 // ══════════════════════════════════════════════════════════════
-const API_URL = 'https://script.google.com/macros/s/AKfycbzYLQ6BueKUlxA4ynQDuIEF9QLhA9qXTgIO2unuTrKwX9fB5vo1z2bwtdA-VqzELJgbqA/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzUmgQ_CCKVUGOkaFdWUBcsY40swIHWHlEWjwonKbaDBJsT5t6Ay2U_JJIs8thq9Fc9GA/exec';
 
 // ══════════════════════════════════════════════════════════════
 // ⚠️ CONFIGURAÇÃO 2: COLOQUE O NÚMERO DO WHATSAPP DO VENDEDOR
